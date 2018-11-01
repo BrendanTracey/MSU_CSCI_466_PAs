@@ -1,7 +1,7 @@
 '''
 Created on Oct 12, 2016
 
-@author: mwittie
+@author: brendan
 '''
 import network
 import link
