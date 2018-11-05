@@ -35,8 +35,10 @@ class NetworkPacket:
     ## packet encoding lengths
     dst_addr_S_length = 5
 
-    ##@param dst_addr: address of the destination host
-    # @param data_S: packet payload
+    #changed packet class to take in the usual, plus flag id offset
+    #Id determines the large packet that the segment is from
+    #offset determines what chunk of the message it is. I implemented this as an integer, just split the big messsge into and array based on MTU size and each slot in the arry contains a proper sized chunk
+    #flag is all set to one until the last message is sent
     def __init__(self, dst_addr, data_S, flag, id, offset):
         self.dst_addr = dst_addr
         self.data_S = data_S
@@ -83,16 +85,26 @@ class Host:
     # @param dst_addr: destination address for the packet
     # @param data_S: data being transmitted to the network layer
     def udt_send(self, dst_addr, data_S, flag, id, offset):
+        #logic procedure to break down the packet when it is too small for the mtu
         if (len(data_S) > self.out_intf_L[0].mtu):
+            #set all variables to correct number, increment id to ensure no duplicates and offset to begin
             self.flag = 1
             self.id = id + 1
             offset = 0
             chunks = data_S
             chunk_size = self.out_intf_L[0].mtu
+            #This breaks the packet into string chunks into an array where each slot contains the proper sized message
             [chunks[i:i+chunk_size] for i in range(0,len(chunks), chunk_size)]
             for x in range(0, (len(chunks) - 1)):
+                #incrementally send each slot in the array, ensuring each packet from within the larger packet has the same id
+                #increment offset by 1, since each slot in the array will have the maximum size for smaller packets
+                #greedy segmentation is optmial in this case if you want me to prove it dm me on instagram
                  g = NetworkPacket(self,dst_addr,chunks[x],1,id,offset)
+                 self.out_intf_L[0].put(g.to_byte_S())
                  offset = offset + 1
+            #last chunk will have everything the same, but flag 0 so that the receiver knows the message is over
+            g = NetworkPacket(self,dst_addr,chunks[len(chunks)],0,id,offset)
+            self.out_intf_L[0].put(g.to_byte_S())
         else:
             p = NetworkPacket(dst_addr, data_S, 1, 0, 0)
         self.out_intf_L[0].put(p.to_byte_S()) #send packets always enqueued successfully
