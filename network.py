@@ -35,16 +35,15 @@ class NetworkPacket:
     ## packet encoding lengths
     dst_addr_S_length = 5
 
-    #changed packet class to take in the usual, plus flag id offset
-    #Id determines the large packet that the segment is from
-    #offset determines what chunk of the message it is. I implemented this as an integer, just split the big messsge into and array based on MTU size and each slot in the arry contains a proper sized chunk
-    #flag is all set to one until the last message is sent
-    def __init__(self, dst_addr, data_S, flag, id, offset):
+    ##@param dst_addr: address of the destination host
+    # @param data_S: packet payload
+    def __init__(self, dst_addr, data_S, id, flag, offset):
         self.dst_addr = dst_addr
         self.data_S = data_S
-        self.flag = flag
         self.id = id
+        self.flag = flag
         self.offset = offset
+
 
     ## called when printing the object
     def __str__(self):
@@ -57,12 +56,15 @@ class NetworkPacket:
         return byte_S
 
     ## extract a packet object from a byte string
-    # @param byte_S: byte string representation of the packet
+    # modified to properly extract all the segmented related fields
     @classmethod
     def from_byte_S(self, byte_S):
         dst_addr = int(byte_S[0 : NetworkPacket.dst_addr_S_length])
         data_S = byte_S[NetworkPacket.dst_addr_S_length : ]
-        return self(dst_addr, data_S, flag, id, offset)
+        id = byte_S[NetworkPacket.dst_addr_S_length - 2]
+        flag = byte_S[NetworkPacket.dst_addr_S_length - 1]
+        offset = byte_S[NetworkPacket.dst_addr_S_length]
+        return self(dst_addr, data_S, id, flag, offset)
 
 
 
@@ -84,31 +86,35 @@ class Host:
     ## create a packet and enqueue for transmission
     # @param dst_addr: destination address for the packet
     # @param data_S: data being transmitted to the network layer
-    def udt_send(self, dst_addr, data_S, flag, id, offset):
-        #logic procedure to break down the packet when it is too small for the mtu
-        if (len(data_S) > self.out_intf_L[0].mtu):
-            #set all variables to correct number, increment id to ensure no duplicates and offset to begin
-            self.flag = 1
-            self.id = id + 1
-            offset = 0
-            chunks = data_S
-            chunk_size = self.out_intf_L[0].mtu
-            #This breaks the packet into string chunks into an array where each slot contains the proper sized message
-            [chunks[i:i+chunk_size] for i in range(0,len(chunks), chunk_size)]
-            for x in range(0, (len(chunks) - 1)):
-                #incrementally send each slot in the array, ensuring each packet from within the larger packet has the same id
-                #increment offset by 1, since each slot in the array will have the maximum size for smaller packets
-                #greedy segmentation is optmial in this case if you want me to prove it dm me on instagram
-                 g = NetworkPacket(self,dst_addr,chunks[x],1,id,offset)
-                 self.out_intf_L[0].put(g.to_byte_S())
-                 offset = offset + 1
-            #last chunk will have everything the same, but flag 0 so that the receiver knows the message is over
-            g = NetworkPacket(self,dst_addr,chunks[len(chunks)],0,id,offset)
-            self.out_intf_L[0].put(g.to_byte_S())
+    # @param id for the fragmented packets original data
+    # @param flag for the type of flag it has
+    # @param offset for what chunk of the data it is
+    #udt send now has 6 parameters, to send along the variables necessary for fragmentation. If the message length is higher than the MTU,
+    #then it will break it into an array of the information and then go through the array and create a new packet that will fit
+    #underneath the MTU
+    def udt_send(self, dst_addr, data_S, id, flag, offset):
+        p = NetworkPacket(dst_addr, data_S, id, flag, offset)
+        #fragment the packet if it is smaller than mtu
+        if len(p.data_S) > self.out_intf_L[0].mtu:
+            print('Fragmenting packet')
+            #break message into fragments
+            chunks = [data_S[i:i+self.out_intf_L[0].mtu] for i in range(0, len(data_S), self.out_intf_L[0].mtu)]
+            #print for testing purposes
+            for i in range(len(chunks)):
+                print('Chunk %d has the message: %s' % (i, chunks[i]))
+            #for loop that sends each appropriately sized packet. No need to recurse, since we already know the MTU so each smaller packet is perfectly sized
+            #Greedy approach of breaking everything down into chunks the exact size of the MTU is optimal
+            for i in range(len(chunks) - 1):
+                #All the chunks from the same original packet have the same id, so they can be reconstructed
+                #All chunks but the last one will have flag 1 to demonstrate there are more packets
+                g = NetworkPacket(dst_addr,chunks[i], id, 1, i)
+                self.out_intf_L[0].put(g.to_byte_S())
+            #last chunk, flag identification 0, receiver knows the chunk is over
+            h = NetworkPacket(dst_addr,chunks[0], id, 0, len(chunks))
+            self.out_intf_L[0].put(h.to_byte_S())
         else:
-            p = NetworkPacket(dst_addr, data_S, 1, 0, 0)
-        self.out_intf_L[0].put(p.to_byte_S()) #send packets always enqueued successfully
-        print('%s: sending packet "%s" on the out interface with mtu=%d' % (self, p, self.out_intf_L[0].mtu))
+            self.out_intf_L[0].put(p.to_byte_S()) #send packets always enqueued successfully
+            print('%s: Sending whole packet "%s" on the out interface with mtu=%d' % (self, p, self.out_intf_L[0].mtu))
 
     ## receive packet from the network layer
     def udt_receive(self):
