@@ -1,6 +1,6 @@
 '''
-Created on Oct 12, 2016
-@author: mwittie
+Created on Nov 5 2018
+@author: btracey
 '''
 import network
 import link
@@ -15,17 +15,18 @@ if __name__ == '__main__':
     object_L = [] #keeps track of objects, so we can kill their threads
 
     #create network nodes
+    #now supports the topology in part 2 of the project, with 2 clients, 4 routers and 2 servers connected as specified
     client1 = network.Host(1)
     object_L.append(client1)
     client2 = network.Host(2)
     object_L.append(client2)
-    router_a = network.Router(name='A', intf_count=2, max_queue_size=router_queue_size)
+    router_a = network.Router(name='A', intf_count=2, max_queue_size=router_queue_size ,routing_table=['B','C'])
     object_L.append(router_a)
-    router_b = network.Router(name='B', intf_count=2, max_queue_size=router_queue_size)
+    router_b = network.Router(name='B', intf_count=2, max_queue_size=router_queue_size, routing_table=['D'])
     object_L.append(router_b)
-    router_c = network.Router(name='C', intf_count=2, max_queue_size=router_queue_size)
+    router_c = network.Router(name='C', intf_count=2, max_queue_size=router_queue_size, routing_table=['D'])
     object_L.append(router_c)
-    router_d = network.Router(name='D', intf_count=2, max_queue_size=router_queue_size)
+    router_d = network.Router(name='D', intf_count=2, max_queue_size=router_queue_size, routing_table=['Three','Four'])
     object_L.append(router_d)
     server3 = network.Host(3)
     object_L.append(server3)
@@ -38,6 +39,7 @@ if __name__ == '__main__':
 
     #add all the links
     #link parameters: from_node, from_intf_num, to_node, to_intf_num, mtu
+    #conforms to all the routing interface and link connection
     link_layer.add_link(link.Link(client1, 0, router_a, 0, 50))
     link_layer.add_link(link.Link(client2, 0, router_a, 1, 50))
     link_layer.add_link(link.Link(router_a, 0, router_b, 0, 30))

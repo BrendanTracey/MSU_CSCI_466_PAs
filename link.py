@@ -1,6 +1,6 @@
 '''
-Created on Oct 12, 2016
-@author: mwittie
+Created on Nov 5 2018
+@author: btracey
 '''
 
 import queue

@@ -1,6 +1,6 @@
 '''
-Created on Oct 12, 2016
-@author: mwittie
+Created on Nov 5 2018
+@author: btracey
 '''
 import queue
 import threading
@@ -141,9 +141,13 @@ class Router:
     ##@param name: friendly router name for debugging
     # @param intf_count: the number of input and output interfaces
     # @param max_queue_size: max queue length (passed to Interface)
-    def __init__(self, name, intf_count, max_queue_size):
+    # @param Routing table added manually in the simulation class, but since we know the all the
+    # setup of our network and links we can just manually add all the routing tables. Since we know the name of the destination
+    # we can just use a one dimensional array and traverse by number
+    def __init__(self, name, intf_count, max_queue_size, routing_table):
         self.stop = False #for thread termination
         self.name = name
+        self.routing_table = routing_table
         #create a list of interfaces
         self.in_intf_L = [Interface(max_queue_size) for _ in range(intf_count)]
         self.out_intf_L = [Interface(max_queue_size) for _ in range(intf_count)]
@@ -163,12 +167,20 @@ class Router:
                 #if packet exists make a forwarding decision
                 if pkt_S is not None:
                     p = NetworkPacket.from_byte_S(pkt_S) #parse a packet out
-                    # HERE you will need to implement a lookup into the
-                    # forwarding table to find the appropriate outgoing interface
-                    # for now we assume the outgoing interface is also i
-                    self.out_intf_L[i].put(p.to_byte_S(), True)
-                    print('%s: forwarding packet "%s" from interface %d to %d with mtu %d' \
-                        % (self, p, i, i, self.out_intf_L[i].mtu))
+                    #check the slot in the table to see if the next destination is server 3, from client 1
+                    #then redirect the packet based on the routing table
+                    if self.routing_table[0] == 'Three':
+                        self.out_intf_L[i].put(p.to_byte_S(), True)
+                        print('%s: forwarding packet "%s" from interface %d to %d with mtu %d' \
+                            % (self, p, i, 0, self.out_intf_L[i].mtu))
+                    #check the slot in the table to see if the next destination is server 4, from client 2
+                    #then redirect the packet based on the routing table
+                    elif self.routing_table[0] == 'Four':
+                        self.out_intf_L[i].put(p.to_byte_S(), True)
+                        print('%s: forwarding packet "%s" from interface %d to %d with mtu %d' \
+                            % (self, p, i, 1, self.out_intf_L[i].mtu))
+                    else:
+                        self.out_intf_L[i].put(p.to_byte_S(), True)
             except queue.Full:
                 print('%s: packet "%s" lost on interface %d' % (self, p, i))
                 pass
